@@ -63,6 +63,16 @@ class EqualWeightPortfolio:
         TODO: Complete Task 1 Below
         """
 
+
+        n_assets = len(assets)
+        if n_assets > 0:
+            equal_weight = 1.0 / n_assets
+            self.portfolio_weights.loc[:, assets] = equal_weight
+
+        if self.exclude in self.portfolio_weights.columns:
+            self.portfolio_weights.loc[:, self.exclude] = 0.0
+
+
         """
         TODO: Complete Task 1 Above
         """
@@ -115,14 +125,39 @@ class RiskParityPortfolio:
         """
 
 
+        rets = df_returns[assets]
+
+        for i in range(self.lookback + 1, len(df)):
+            window = rets.iloc[i - self.lookback : i]
+
+            sigma = window.std()
+
+            inv_sigma = 1.0 / sigma.replace(0, np.nan)
+            inv_sigma = inv_sigma.replace([np.inf, -np.inf], np.nan)
+
+            if inv_sigma.isna().all():
+                w = np.ones(len(assets)) / len(assets)
+            else:
+                inv_sigma = inv_sigma.fillna(0.0)
+                total = inv_sigma.sum()
+                if total == 0:
+                    w = np.ones(len(assets)) / len(assets)
+                else:
+                    w = inv_sigma / total
+
+            self.portfolio_weights.loc[df.index[i], assets] = w.values
+
+        if self.exclude in self.portfolio_weights.columns:
+            self.portfolio_weights.loc[:, self.exclude] = 0.0
+
 
         """
         TODO: Complete Task 2 Above
         """
 
-        self.portfolio_weights.ffill(inplace=True)
         self.portfolio_weights.fillna(0, inplace=True)
-
+        self.portfolio_weights.ffill(inplace=True)
+        
     def calculate_portfolio_returns(self):
         # Ensure weights are calculated
         if not hasattr(self, "portfolio_weights"):
@@ -190,8 +225,28 @@ class MeanVariancePortfolio:
 
                 # Sample Code: Initialize Decision w and the Objective
                 # NOTE: You can modify the following code
-                w = model.addMVar(n, name="w", ub=1)
-                model.setObjective(w.sum(), gp.GRB.MAXIMIZE)
+
+
+                w = model.addMVar(n, name="w", lb=0.0, ub=1.0)
+
+                model.addConstr(w.sum() == 1.0)
+
+                if gamma is None:
+                    gamma = 0.0
+
+                Q = -gamma * Sigma  
+                quad_obj = gp.QuadExpr()
+                for i in range(n):
+                    for j in range(n):
+                        if Q[i, j] != 0:
+                            quad_obj += Q[i, j] * w[i] * w[j]
+
+                lin_obj = gp.LinExpr()
+                for i in range(n):
+                    lin_obj += mu[i] * w[i]
+
+                model.setObjective(0.5 * quad_obj + lin_obj, gp.GRB.MAXIMIZE)
+
 
                 """
                 TODO: Complete Task 3 Above
