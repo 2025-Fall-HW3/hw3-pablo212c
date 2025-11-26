@@ -71,6 +71,33 @@ class MyPortfolio:
         TODO: Complete Task 4 Below
         """
         
+
+        self.portfolio_weights.loc[:, :] = 0.0
+
+        rets = self.returns[assets]
+        sigma = rets.std()
+
+        inv_sigma = 1.0 / sigma.replace(0, np.nan)
+        inv_sigma = inv_sigma.replace([np.inf, -np.inf], np.nan).fillna(0.0)
+
+        if inv_sigma.sum() == 0:
+            base_w = np.ones(len(assets)) / len(assets)
+        else:
+            base_w = inv_sigma / inv_sigma.sum()
+
+        spy_price = self.price[self.exclude]
+        ma_window = 200
+        spy_ma = spy_price.rolling(window=ma_window, min_periods=ma_window).mean()
+
+        for date in self.price.index:
+            if (not np.isnan(spy_ma.loc[date])) and (spy_price.loc[date] > spy_ma.loc[date]):
+                self.portfolio_weights.loc[date, assets] = base_w.values
+            else:
+                self.portfolio_weights.loc[date, assets] = 0.0
+
+        self.portfolio_weights.loc[:, self.exclude] = 0.0
+
+
         
         """
         TODO: Complete Task 4 Above
